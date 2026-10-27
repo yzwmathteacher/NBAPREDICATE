@@ -1,0 +1,1684 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2026-27赛季NBA赛事模拟与战术分析系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#165DFF',
+                        secondary: '#4080FF',
+                        dark: '#0E2B5C'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .tab-active { background: #165DFF; color: white; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .card { background: white; border-radius: 12px; box-shadow: 0 2px 12px rgba(22,93,255,0.1); padding: 20px; margin-bottom: 16px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { padding: 6px 8px; border: 1px solid #e5e7eb; text-align: center; }
+        th { background: #f0f7ff; color: #0E2B5C; font-weight: 600; }
+        .player-item { padding: 6px 10px; border: 1px solid #e5e7eb; border-radius: 6px; margin: 2px; cursor: pointer; transition: all 0.2s; font-size: 13px; }
+        .player-item:hover { background: #f0f7ff; border-color: #165DFF; }
+        .player-item.selected { background: #165DFF; color: white; }
+        .injured { opacity: 0.5; text-decoration: line-through; }
+        #gameCanvas { border: 2px solid #165DFF; border-radius: 8px; background: #f0f7ff; display: block; margin: 0 auto; }
+        .standings-east, .standings-west { width: 48%; }
+        .playoff-bracket { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+        .playoff-round { flex: 1; }
+        .playoff-match { border: 1px solid #e5e7eb; border-radius: 6px; padding: 8px; margin: 8px 0; font-size: 12px; background: #f9fafb; }
+        .playoff-match.winner { border-color: #165DFF; background: #f0f7ff; font-weight: bold; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- 顶部导航 -->
+    <header class="bg-gradient-to-r from-primary to-secondary text-white py-4 px-6 shadow-lg">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold">🏀 2026-27赛季NBA赛事模拟与战术分析系统</h1>
+            <span class="text-sm opacity-80">全功能增强版 · 纯前端离线运行</span>
+        </div>
+    </header>
+
+    <div class="max-w-7xl mx-auto p-6">
+        <!-- 标签页导航 -->
+        <div class="flex gap-2 mb-6 flex-wrap">
+            <button class="tab-btn tab-active px-4 py-2 rounded-lg font-medium transition-all text-sm" onclick="switchTab(0)">数据管理</button>
+            <button class="tab-btn bg-white text-gray-700 px-4 py-2 rounded-lg font-medium transition-all hover:bg-blue-50 text-sm" onclick="switchTab(1)">竞争力分析</button>
+            <button class="tab-btn bg-white text-gray-700 px-4 py-2 rounded-lg font-medium transition-all hover:bg-blue-50 text-sm" onclick="switchTab(2)">比赛模拟</button>
+            <button class="tab-btn bg-white text-gray-700 px-4 py-2 rounded-lg font-medium transition-all hover:bg-blue-50 text-sm" onclick="switchTab(3)">战术建议</button>
+            <button class="tab-btn bg-white text-gray-700 px-4 py-2 rounded-lg font-medium transition-all hover:bg-blue-50 text-sm" onclick="switchTab(4)">阵容交易</button>
+            <button class="tab-btn bg-white text-gray-700 px-4 py-2 rounded-lg font-medium transition-all hover:bg-blue-50 text-sm" onclick="switchTab(5)">赛季模拟</button>
+            <button class="tab-btn bg-white text-gray-700 px-4 py-2 rounded-lg font-medium transition-all hover:bg-blue-50 text-sm" onclick="switchTab(6)">规则设置</button>
+            <button class="tab-btn bg-white text-gray-700 px-4 py-2 rounded-lg font-medium transition-all hover:bg-blue-50 text-sm" onclick="switchTab(7)">历史记录</button>
+        </div>
+
+        <!-- 标签页1：数据管理 -->
+        <div class="tab-content active" id="tab-0">
+            <div class="card">
+                <h3 class="text-lg font-bold text-dark mb-4">📊 Excel球队数据导入（适配2026-27赛季模板）</h3>
+                <p class="text-gray-600 text-sm mb-4">支持.xlsx格式，自动识别球队、球员、场均数据等字段，新秀自动生成基准评分</p>
+                <div class="flex gap-4 items-center mb-4 flex-wrap">
+                    <input type="file" id="excelFile" accept=".xlsx,.xls" class="border rounded-lg p-2 flex-1 min-w-[200px]">
+                    <button onclick="importExcel()" class="bg-primary text-white px-6 py-2 rounded-lg hover:bg-secondary transition">导入数据</button>
+                    <button onclick="clearAllData()" class="bg-red-500 text-white px-6 py-2 rounded-lg hover:bg-red-600 transition">清空数据</button>
+                </div>
+                <div id="importTip" class="text-sm text-green-600 mb-4 hidden">✅ 导入成功！共加载 <span id="teamCount">0</span> 支球队，<span id="playerCount">0</span> 名球员</div>
+            </div>
+
+            <div class="card">
+                <h3 class="text-lg font-bold text-dark mb-4">🏆 已导入球队列表</h3>
+                <div id="teamList" class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <div class="text-gray-400 col-span-full text-center py-8">暂无数据，请先导入Excel文件</div>
+                </div>
+            </div>
+
+            <div class="card" id="playerDetailCard" style="display:none;">
+                <h3 class="text-lg font-bold text-dark mb-4">👥 球队球员详情</h3>
+                <div class="flex gap-2 mb-4">
+                    <select id="detailTeamSelect" class="border rounded-lg p-2 w-64" onchange="renderPlayerDetail()"></select>
+                    <button onclick="toggleInjuryMode()" id="injuryModeBtn" class="bg-orange-500 text-white px-4 py-2 rounded-lg text-sm">设置伤病模式</button>
+                </div>
+                <div id="playerDetailTable"></div>
+            </div>
+        </div>
+
+        <!-- 标签页2：竞争力分析 -->
+        <div class="tab-content" id="tab-1">
+            <div class="card">
+                <h3 class="text-lg font-bold text-dark mb-4">📈 球队竞争力排名</h3>
+                <div class="flex gap-4 mb-4 flex-wrap">
+                    <select id="rankSort" class="border rounded-lg p-2 w-48" onchange="renderRank()">
+                        <option value="overall">综合评分</option>
+                        <option value="offense">进攻评分</option>
+                        <option value="defense">防守评分</option>
+                        <option value="depth">阵容深度</option>
+                        <option value="clutch">关键球能力</option>
+                    </select>
+                    <button onclick="renderRank()" class="bg-primary text-white px-4 py-2 rounded-lg">刷新排名</button>
+                </div>
+                <table id="rankTable">
+                    <thead>
+                        <tr>
+                            <th>排名</th>
+                            <th>球队</th>
+                            <th>综合</th>
+                            <th>进攻</th>
+                            <th>防守</th>
+                            <th>阵容深度</th>
+                            <th>关键球</th>
+                            <th>三分</th>
+                            <th>内线</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rankBody"></tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <h3 class="text-lg font-bold text-dark mb-4">🎯 双队能力雷达对比</h3>
+                <div class="flex gap-4 mb-4">
+                    <select id="radarTeam1" class="border rounded-lg p-2 flex-1"></select>
+                    <select id="radarTeam2" class="border rounded-lg p-2 flex-1"></select>
+                    <button onclick="renderRadar()" class="bg-primary text-white px-4 py-2 rounded-lg">生成对比</button>
+                </div>
+                <div style="max-width: 600px; margin: 0 auto;">
+                    <canvas id="radarChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 标签页3：比赛模拟 -->
+        <div class="tab-content" id="tab-2">
+            <div class="card">
+                <h3 class="text-lg font-bold text-dark mb-4">⚔️ 比赛设置</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">主场球队</label>
+                        <select id="homeTeam" class="border rounded-lg p-2 w-full"></select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">客场球队</label>
+                        <select id="awayTeam" class="border rounded-lg p-2 w-full"></select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">模拟次数</label>
+                        <select id="simTimes" class="border rounded-lg p-2 w-full">
+                            <option value="100">100次（快速）</option>
+                            <option value="1000" selected>1000次（标准）</option>
+                            <option value="5000">5000次（精准）</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">主场战术</label>
+                        <select id="homeTactic" class="border rounded-lg p-2 w-full">
+                            <option value="auto">自动均衡</option>
+                            <option value="insideAttack">内线强攻</option>
+                            <option value="threePointShoot">三分投射</option>
+                            <option value="pickAndRoll">挡拆突破</option>
+                            <option value="fastBreak">快攻反击</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">客场战术</label>
+                        <select id="awayTactic" class="border rounded-lg p-2 w-full">
+                            <option value="auto">自动均衡</option>
+                            <option value="insideAttack">内线强攻</option>
+                            <option value="threePointShoot">三分投射</option>
+                            <option value="pickAndRoll">挡拆突破</option>
+                            <option value="fastBreak">快攻反击</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex gap-3 flex-wrap">
+                    <button onclick="runSingleSim()" class="bg-primary text-white px-6 py-2 rounded-lg hover:bg-secondary transition">单场精细模拟</button>
+                    <button onclick="startGameAnimation()" class="bg-dark text-white px-6 py-2 rounded-lg hover:bg-primary transition">比赛动画演示</button>
+                    <button onclick="runBatchSim()" class="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition">批量蒙特卡洛模拟</button>
+                    <button onclick="exportSimResult()" class="bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition">导出结果</button>
+                </div>
+            </div>
+
+            <!-- 比赛动画 -->
+            <div class="card" id="animationCard" style="display:none;">
+                <h3 class="text-lg font-bold text-dark mb-4">🎬 比赛动画演示</h3>
+                <div class="text-center mb-4">
+                    <div class="flex justify-center items-center gap-8 text-xl font-bold">
+                        <span id="animHomeName" class="text-primary">主队</span>
+                        <span><span id="animHomeScore" class="text-3xl">0</span> : <span id="animAwayScore" class="text-3xl">0</span></span>
+                        <span id="animAwayName" class="text-secondary">客队</span>
+                    </div>
+                    <p id="animQuarter" class="text-gray-600 mt-1">第一节 00:00</p>
+                    <p id="animEvent" class="text-sm text-dark mt-1 font-medium">比赛即将开始...</p>
+                </div>
+                <canvas id="gameCanvas" width="800" height="450"></canvas>
+                <div class="flex justify-center gap-4 mt-4">
+                    <button onclick="pauseAnimation()" id="animPauseBtn" class="bg-primary text-white px-6 py-2 rounded-lg">暂停</button>
+                    <button onclick="resetAnimation()" class="bg-gray-500 text-white px-6 py-2 rounded-lg">重置</button>
+                </div>
+            </div>
+
+            <!-- 单场模拟结果 -->
+            <div class="card" id="singleResultCard" style="display:none;">
+                <h3 class="text-lg font-bold text-dark mb-4">📋 单场模拟详情</h3>
+                <div class="text-center mb-4">
+                    <div class="flex justify-center items-center gap-8 text-xl font-bold">
+                        <span id="singleHomeName" class="text-primary">主队</span>
+                        <span><span id="singleHomeScore" class="text-3xl">0</span> : <span id="singleAwayScore" class="text-3xl">0</span></span>
+                        <span id="singleAwayName" class="text-secondary">客队</span>
+                    </div>
+                    <p id="singleResultText" class="text-gray-600 mt-2"></p>
+                </div>
+                <table class="mb-4">
+                    <thead>
+                        <tr>
+                            <th>球队</th>
+                            <th>第一节</th>
+                            <th>第二节</th>
+                            <th>第三节</th>
+                            <th>第四节</th>
+                            <th>总分</th>
+                        </tr>
+                    </thead>
+                    <tbody id="quarterBody"></tbody>
+                </table>
+            </div>
+
+            <!-- 批量模拟结果 -->
+            <div class="card" id="batchResultCard" style="display:none;">
+                <h3 class="text-lg font-bold text-dark mb-4">📊 批量模拟统计（蒙特卡洛）</h3>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                    <div class="bg-blue-50 rounded-lg p-4 text-center">
+                        <div class="text-2xl font-bold text-primary" id="homeWinRate">0%</div>
+                        <div class="text-sm text-gray-600">主队胜率</div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-4 text-center">
+                        <div class="text-2xl font-bold text-gray-700" id="awayWinRate">0%</div>
+                        <div class="text-sm text-gray-600">客队胜率</div>
+                    </div>
+                    <div class="bg-green-50 rounded-lg p-4 text-center">
+                        <div class="text-2xl font-bold text-green-600" id="avgTotalScore">0</div>
+                        <div class="text-sm text-gray-600">场均总得分</div>
+                    </div>
+                    <div class="bg-orange-50 rounded-lg p-4 text-center">
+                        <div class="text-2xl font-bold text-orange-600" id="avgDiff">0</div>
+                        <div class="text-sm text-gray-600">场均分差</div>
+                    </div>
+                </div>
+                <div style="max-width: 700px; margin: 0 auto;">
+                    <canvas id="scoreDistChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 标签页4：战术建议 -->
+        <div class="tab-content" id="tab-3">
+            <div class="card">
+                <h3 class="text-lg font-bold text-dark mb-4">🧠 智能战术寻优</h3>
+                <p class="text-gray-600 text-sm mb-4">系统自动遍历所有16种攻防战术组合，计算胜率最高的战术搭配，给出针对性建议</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">我方球队</label>
+                        <select id="myTeam" class="border rounded-lg p-2 w-full"></select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">对手球队</label>
+                        <select id="opponentTeam" class="border rounded-lg p-2 w-full"></select>
+                    </div>
+                </div>
+                <button onclick="getTacticAdvice()" class="bg-primary text-white px-6 py-2 rounded-lg hover:bg-secondary transition">生成战术建议</button>
+            </div>
+
+            <div class="card" id="tacticResultCard" style="display:none;">
+                <h3 class="text-lg font-bold text-dark mb-4">✅ 最优战术方案</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div class="border-l-4 border-primary pl-4">
+                        <h4 class="font-bold text-primary mb-2">推荐进攻战术</h4>
+                        <p id="bestOffTactic" class="text-lg font-medium"></p>
+                        <p id="offTacticReason" class="text-sm text-gray-600 mt-1"></p>
+                    </div>
+                    <div class="border-l-4 border-green-500 pl-4">
+                        <h4 class="font-bold text-green-600 mb-2">推荐防守战术</h4>
+                        <p id="bestDefTactic" class="text-lg font-medium"></p>
+                        <p id="defTacticReason" class="text-sm text-gray-600 mt-1"></p>
+                    </div>
+                </div>
+                <div class="bg-blue-50 rounded-lg p-4 mb-4">
+                    <h4 class="font-bold text-dark mb-2">📌 针对性战术建议</h4>
+                    <ul id="tacticTips" class="text-sm text-gray-700 space-y-1"></ul>
+                </div>
+                <div>
+                    <h4 class="font-bold text-dark mb-2">📊 全战术组合胜率表</h4>
+                    <table id="tacticTable">
+                        <thead>
+                            <tr>
+                                <th>进攻战术\防守战术</th>
+                                <th>收缩内线</th>
+                                <th>外线盯人</th>
+                                <th>区域联防</th>
+                                <th>全场紧逼</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tacticTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 标签页5：阵容交易 -->
+        <div class="tab-content" id="tab-4">
+            <div class="card">
+                <h3 class="text-lg font-bold text-dark mb-4">🔄 阵容交易试算</h3>
+                <p class="text-gray-600 text-sm mb-4">选择两队球员进行交易，实时查看战力变化与交易评级</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">球队A</label>
+                        <select id="tradeTeamA" class="border rounded-lg p-2 w-full mb-3" onchange="renderTradePlayers('A')"></select>
+                        <div id="tradePlayersA" class="border rounded-lg p-3 min-h-[200px] bg-gray-50 flex flex-wrap content-start"></div>
+                        <div class="mt-3 text-sm">
+                            <span class="font-medium">交易前战力：</span><span id="teamAPreScore" class="text-primary font-bold">-</span>
+                            <span class="ml-4 font-medium">交易后战力：</span><span id="teamAPostScore" class="text-primary font-bold">-</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">球队B</label>
+                        <select id="tradeTeamB" class="border rounded-lg p-2 w-full mb-3" onchange="renderTradePlayers('B')"></select>
+                        <div id="tradePlayersB" class="border rounded-lg p-3 min-h-[200px] bg-gray-50 flex flex-wrap content-start"></div>
+                        <div class="mt-3 text-sm">
+                            <span class="font-medium">交易前战力：</span><span id="teamBPreScore" class="text-primary font-bold">-</span>
+                            <span class="ml-4 font-medium">交易后战力：</span><span id="teamBPostScore" class="text-primary font-bold">-</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex justify-center gap-4 mt-6">
+                    <button onclick="executeTrade()" class="bg-primary text-white px-8 py-2 rounded-lg hover:bg-secondary transition">执行交易</button>
+                    <button onclick="resetTrade()" class="bg-gray-500 text-white px-8 py-2 rounded-lg hover:bg-gray-600 transition">重置选择</button>
+                </div>
+                <div id="tradeResult" class="mt-4 text-center hidden">
+                    <div class="inline-block bg-green-50 border border-green-200 rounded-lg p-4">
+                        <p class="font-bold text-green-700" id="tradeRating"></p>
+                        <p class="text-sm text-gray-600 mt-1" id="tradeComment"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 标签页6：赛季模拟 -->
+        <div class="tab-content" id="tab-5">
+            <div class="card">
+                <h3 class="text-lg font-bold text-dark mb-4">🏆 赛季全程模拟</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">模拟赛季次数</label>
+                        <select id="seasonSimTimes" class="border rounded-lg p-2 w-full">
+                            <option value="1">单赛季精确模拟</option>
+                            <option value="10" selected>10次蒙特卡洛</option>
+                            <option value="100">100次概率模拟</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">伤病概率</label>
+                        <select id="injuryRate" class="border rounded-lg p-2 w-full">
+                            <option value="low">低（真实NBA水平）</option>
+                            <option value="normal" selected>正常</option>
+                            <option value="high">高</option>
+                        </select>
+                    </div>
+                    <div class="flex items-end">
+                        <button onclick="runSeasonSim()" class="bg-primary text-white px-6 py-2 rounded-lg hover:bg-secondary transition w-full">开始赛季模拟</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" id="seasonResultCard" style="display:none;">
+                <h3 class="text-lg font-bold text-dark mb-4">📊 常规赛最终排名</h3>
+                <div class="flex justify-between flex-wrap gap-4">
+                    <div class="standings-east">
+                        <h4 class="font-bold text-primary mb-2 text-center">东部联盟</h4>
+                        <table id="eastStandings"></table>
+                    </div>
+                    <div class="standings-west">
+                        <h4 class="font-bold text-primary mb-2 text-center">西部联盟</h4>
+                        <table id="westStandings"></table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" id="playoffCard" style="display:none;">
+                <h3 class="text-lg font-bold text-dark mb-4">🏀 季后赛对阵图</h3>
+                <div class="playoff-bracket" id="playoffBracket"></div>
+                <div class="text-center mt-6">
+                    <div class="inline-block bg-yellow-50 border-2 border-yellow-400 rounded-lg p-4">
+                        <p class="text-sm text-yellow-700">🏆 总冠军</p>
+                        <p class="text-2xl font-bold text-yellow-800" id="championTeam">-</p>
+                        <p class="text-sm text-gray-600 mt-1" id="championProb"></p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" id="champProbCard" style="display:none;">
+                <h3 class="text-lg font-bold text-dark mb-4">📈 各队夺冠概率（蒙特卡洛）</h3>
+                <div style="max-width: 700px; margin: 0 auto;">
+                    <canvas id="champProbChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 标签页7：规则设置 -->
+        <div class="tab-content" id="tab-6">
+            <div class="card">
+                <h3 class="text-lg font-bold text-dark mb-4">⚙️ 比赛规则设置</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">联赛规则预设</label>
+                        <select id="leaguePreset" class="border rounded-lg p-2 w-full mb-4" onchange="applyRulePreset()">
+                            <option value="nba">NBA规则（默认）</option>
+                            <option value="cba">CBA规则</option>
+                            <option value="fiba">FIBA国际篮联规则</option>
+                        </select>
+                        
+                        <div class="space-y-3">
+                            <div>
+                                <label class="block text-sm mb-1">节数</label>
+                                <input type="number" id="ruleQuarters" value="4" class="border rounded-lg p-2 w-full" min="1" max="8">
+                            </div>
+                            <div>
+                                <label class="block text-sm mb-1">每节回合数</label>
+                                <input type="number" id="rulePace" value="24" class="border rounded-lg p-2 w-full" min="10" max="40">
+                            </div>
+                            <div>
+                                <label class="block text-sm mb-1">三分线系数（影响三分命中率）</label>
+                                <input type="number" id="ruleThreeFactor" value="1.0" step="0.1" class="border rounded-lg p-2 w-full" min="0.5" max="1.5">
+                            </div>
+                            <div>
+                                <label class="block text-sm mb-1">主场优势系数</label>
+                                <input type="number" id="ruleHomeAdvantage" value="1.03" step="0.01" class="border rounded-lg p-2 w-full" min="1.0" max="1.2">
+                            </div>
+                            <div>
+                                <label class="block text-sm mb-1">犯规罚下阈值</label>
+                                <input type="number" id="ruleFoulLimit" value="6" class="border rounded-lg p-2 w-full" min="5" max="10">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <h4 class="font-bold text-dark mb-3">当前规则说明</h4>
+                        <ul class="text-sm text-gray-600 space-y-2" id="ruleDesc">
+                            <li>• NBA：4节×12分钟，每节约24个进攻回合，三分线7.24米</li>
+                            <li>• 6犯罚下，加时赛5分钟</li>
+                            <li>• 主场优势约3%</li>
+                            <li>• 季后赛7场4胜制</li>
+                        </ul>
+                        <button onclick="saveRules()" class="bg-primary text-white px-6 py-2 rounded-lg mt-4 w-full">保存规则设置</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 标签页8：历史记录 -->
+        <div class="tab-content" id="tab-7">
+            <div class="card">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-bold text-dark">📝 模拟历史记录</h3>
+                    <button onclick="clearHistory()" class="text-red-500 text-sm hover:underline">清空记录</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>时间</th>
+                            <th>类型</th>
+                            <th>对阵</th>
+                            <th>结果</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyBody">
+                        <tr><td colspan="5" class="text-gray-400 py-8">暂无模拟记录</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== 全局数据与配置 ====================
+        let teams = {}; // {球队名: {abbr, players: [], stats: {}}}
+        let simHistory = [];
+        let currentBatchResult = null;
+        let radarChart = null;
+        let scoreDistChart = null;
+        let champProbChart = null;
+        let injuryMode = false;
+        let selectedTradePlayers = { A: [], B: [] };
+        let gameAnimInterval = null;
+        let animPaused = false;
+
+        // 全局规则
+        let gameRules = {
+            quarters: 4,
+            pace: 24,
+            threeFactor: 1.0,
+            homeAdvantage: 1.03,
+            foulLimit: 6,
+            playoffFormat: 'bestOf7'
+        };
+
+        // 战术定义
+        const offensiveTactics = {
+            insideAttack: { name: '内线强攻', insideBonus: 1.15, threePenalty: 0.85, turnoverRate: 0.08 },
+            threePointShoot: { name: '三分投射', threeBonus: 1.2, insidePenalty: 0.9, turnoverRate: 0.1 },
+            pickAndRoll: { name: '挡拆突破', midBonus: 1.1, overallBonus: 1.05, turnoverRate: 0.07 },
+            fastBreak: { name: '快攻反击', paceBonus: 1.2, efficiencyBonus: 1.1, turnoverRate: 0.12 }
+        };
+
+        const defensiveTactics = {
+            paintProtect: { name: '收缩内线', insideDefense: 1.15, threeDefense: 0.85 },
+            perimeterMark: { name: '外线盯人', threeDefense: 1.2, insideDefense: 0.9 },
+            zoneDefense: { name: '区域联防', overallDefense: 1.05, threeDefense: 0.95 },
+            fullCourtPress: { name: '全场紧逼', turnoverBonus: 1.3, foulRisk: 1.2, defensePenalty: 0.95 }
+        };
+
+        const tacticMatrix = {
+            insideAttack: { paintProtect: 0.85, perimeterMark: 1.1, zoneDefense: 1.05, fullCourtPress: 0.92 },
+            threePointShoot: { paintProtect: 1.12, perimeterMark: 0.9, zoneDefense: 1.08, fullCourtPress: 0.95 },
+            pickAndRoll: { paintProtect: 1.05, perimeterMark: 1.03, zoneDefense: 0.92, fullCourtPress: 1.1 },
+            fastBreak: { paintProtect: 1.15, perimeterMark: 1.08, zoneDefense: 1.12, fullCourtPress: 0.88 }
+        };
+
+        // 东西部分区
+        const eastTeams = ['Atlanta Hawks','Boston Celtics','Brooklyn Nets','Charlotte Hornets','Chicago Bulls','Cleveland Cavaliers','Detroit Pistons','Indiana Pacers','Miami Heat','Milwaukee Bucks','New York Knicks','Orlando Magic','Philadelphia 76ers','Toronto Raptors','Washington Wizards'];
+        const westTeams = ['Dallas Mavericks','Denver Nuggets','Golden State Warriors','Houston Rockets','LA Clippers','Los Angeles Lakers','Memphis Grizzlies','Minnesota Timberwolves','New Orleans Pelicans','Oklahoma City Thunder','Phoenix Suns','Portland Trail Blazers','Sacramento Kings','San Antonio Spurs','Utah Jazz'];
+
+        // ==================== 标签页切换 ====================
+        function switchTab(index) {
+            document.querySelectorAll('.tab-btn').forEach((btn, i) => {
+                btn.classList.toggle('tab-active', i === index);
+                btn.classList.toggle('bg-white', i !== index);
+                btn.classList.toggle('text-gray-700', i !== index);
+            });
+            document.querySelectorAll('.tab-content').forEach((tab, i) => {
+                tab.classList.toggle('active', i === index);
+            });
+        }
+
+        // ==================== Excel导入与数据解析 ====================
+        function importExcel() {
+            const file = document.getElementById('excelFile').files[0];
+            if (!file) { alert('请先选择Excel文件'); return; }
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+                
+                teams = {};
+                jsonData.forEach(row => {
+                    const teamName = row['球队'] || '未知球队';
+                    if (!teams[teamName]) teams[teamName] = { abbr: row['球队缩写'] || '', players: [], stats: null };
+                    
+                    // 解析球员数据，计算标准化能力值
+                    const player = parsePlayerFromRow(row);
+                    teams[teamName].players.push(player);
+                });
+
+                // 计算每支球队的综合数据
+                Object.keys(teams).forEach(teamName => {
+                    teams[teamName].stats = calculateTeamStats(teams[teamName].players);
+                });
+
+                saveData();
+                updateAllTeamSelects();
+                renderTeamList();
+                document.getElementById('playerDetailCard').style.display = 'block';
+                document.getElementById('importTip').classList.remove('hidden');
+                document.getElementById('teamCount').textContent = Object.keys(teams).length;
+                document.getElementById('playerCount').textContent = jsonData.length;
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // 从Excel行解析球员并计算能力值
+        function parsePlayerFromRow(row) {
+            const isRookie = row['备注'] && (row['备注'].includes('新秀') || row['备注'].includes('无'));
+            const hasData = row['得分PTS'] !== undefined && row['得分PTS'] !== null && row['得分PTS'] !== '';
+            
+            let pts = Number(row['得分PTS']) || 0;
+            let fgPct = Number(row['投篮命中率FG%']) || 0;
+            let threePct = Number(row['三分命中率3P%']) || 0;
+            let ftPct = Number(row['罚球命中率FT%']) || 0;
+            let reb = Number(row['篮板REB']) || 0;
+            let ast = Number(row['助攻AST']) || 0;
+            let stl = Number(row['抢断STL']) || 0;
+            let blk = Number(row['盖帽BLK']) || 0;
+            let tov = Number(row['失误TOV']) || 0;
+            let min = Number(row['场均时间MIN']) || 0;
+            let gp = Number(row['出场数GP']) || 0;
+
+            // 新秀/无数据球员生成基准值
+            if (!hasData || isRookie) {
+                const pos = row['位置'] || 'G';
+                const base = 55 + Math.random() * 10;
+                if (pos === 'C') {
+                    pts = 8; reb = 6; blk = 1.2; fgPct = 55; threePct = 20;
+                } else if (pos === 'F') {
+                    pts = 10; reb = 4; ast = 2; fgPct = 45; threePct = 32;
+                } else {
+                    pts = 12; ast = 4; reb = 2; fgPct = 42; threePct = 35;
+                }
+                ftPct = 70; stl = 0.8; min = 20; gp = 60;
+            }
+
+            // 标准化能力值计算（0-100分）
+            const offense = Math.min(100, Math.max(40, 
+                pts * 2.5 + fgPct * 0.4 + threePct * 0.2 + ftPct * 0.1 + ast * 1.5
+            ));
+            const defense = Math.min(100, Math.max(40,
+                stl * 15 + blk * 15 + reb * 2 + (100 - tov * 5) * 0.3
+            ));
+            const threePoint = Math.min(100, Math.max(30, threePct * 1.5 + (row['三分命中3PM'] || pts*0.3) * 3));
+            const inside = Math.min(100, Math.max(30, fgPct * 1.2 + reb * 3 + blk * 5));
+            const playmaking = Math.min(100, Math.max(30, ast * 5 - tov * 3 + min * 0.5));
+            const rebound = Math.min(100, Math.max(30, reb * 7));
+            const stamina = Math.min(100, Math.max(40, min * 2 + gp * 0.3));
+            const clutch = Math.min(100, Math.max(40, pts * 3 + ftPct * 0.3));
+
+            return {
+                name: row['球员中文名'] || row['球员英文名'] || '未知球员',
+                nameEn: row['球员英文名'] || '',
+                position: row['位置'] || 'G',
+                number: row['球衣号'] || '',
+                age: Number(row['年龄']) || 25,
+                height: Number(row['身高_cm']) || 200,
+                weight: Number(row['体重_kg']) || 95,
+                experience: Number(row['经验_年']) || 0,
+                minutes: min,
+                games: gp,
+                points: pts,
+                offense,
+                defense,
+                threePoint,
+                inside,
+                playmaking,
+                rebound,
+                stamina,
+                clutch,
+                injured: false,
+                injuryType: '健康',
+                isRookie
+            };
+        }
+
+        // ==================== 球队能力计算 ====================
+        function calculateTeamStats(players) {
+            const availablePlayers = players.filter(p => !p.injured);
+            const sorted = [...availablePlayers].sort((a,b) => b.minutes - a.minutes);
+            const starters = sorted.slice(0,5);
+            const reserves = sorted.slice(5,10);
+
+            const weightedAvg = (playerList, key) => {
+                let total = 0, weight = 0;
+                playerList.forEach(p => {
+                    const w = p.minutes || 20;
+                    total += p[key] * w;
+                    weight += w;
+                });
+                return weight > 0 ? total / weight : 60;
+            };
+
+            const starterOffense = weightedAvg(starters, 'offense');
+            const starterDefense = weightedAvg(starters, 'defense');
+            const reserveOffense = weightedAvg(reserves, 'offense');
+            const reserveDefense = weightedAvg(reserves, 'defense');
+
+            const overallOffense = starterOffense * 0.7 + reserveOffense * 0.3;
+            const overallDefense = starterDefense * 0.7 + reserveDefense * 0.3;
+            const overall = overallOffense * 0.55 + overallDefense * 0.45;
+
+            const depth = 100 - Math.abs(starterOffense - reserveOffense) * 2;
+            const clutch = weightedAvg(starters.slice(0,2), 'clutch');
+            const threeLevel = weightedAvg(starters, 'threePoint');
+            const insideLevel = weightedAvg(starters, 'inside');
+
+            return {
+                overall: Math.round(overall),
+                offense: Math.round(overallOffense),
+                defense: Math.round(overallDefense),
+                depth: Math.round(Math.max(0, Math.min(100, depth))),
+                clutch: Math.round(clutch),
+                threeLevel: Math.round(threeLevel),
+                insideLevel: Math.round(insideLevel),
+                starters,
+                reserves,
+                totalPlayers: players.length
+            };
+        }
+
+        // ==================== 比赛模拟核心 ====================
+        function simulateGame(homeTeam, awayTeam, homeOffTactic = 'pickAndRoll', awayOffTactic = 'pickAndRoll', homeDefTactic = 'perimeterMark', awayDefTactic = 'perimeterMark') {
+            const home = teams[homeTeam].stats;
+            const away = teams[awayTeam].stats;
+
+            const homeOffEff = tacticMatrix[homeOffTactic][awayDefTactic];
+            const awayOffEff = tacticMatrix[awayOffTactic][homeDefTactic];
+
+            const homeBaseScore = (home.offense * 0.6 + 70) * homeOffEff * gameRules.homeAdvantage;
+            const awayBaseScore = (away.offense * 0.6 + 70) * awayOffEff;
+
+            const homeDefFactor = 1 - (home.defense - 60) / 200;
+            const awayDefFactor = 1 - (away.defense - 60) / 200;
+
+            const paceMod = (offensiveTactics[homeOffTactic].paceBonus || 1) * 0.5 + (offensiveTactics[awayOffTactic].paceBonus || 1) * 0.5;
+            const quarterPace = Math.round(gameRules.pace * paceMod);
+
+            const quarters = [[], []];
+            let homeTotal = 0, awayTotal = 0;
+
+            for (let q = 0; q < gameRules.quarters; q++) {
+                const rotationMod = (q === 1 || q === 3) ? 0.95 : 1;
+                const homeRandom = 0.85 + Math.random() * 0.3;
+                const awayRandom = 0.85 + Math.random() * 0.3;
+
+                const homeQuarterScore = Math.round((homeBaseScore * awayDefFactor * rotationMod * homeRandom / gameRules.quarters) * (quarterPace / gameRules.pace) * gameRules.threeFactor);
+                const awayQuarterScore = Math.round((awayBaseScore * homeDefFactor * rotationMod * awayRandom / gameRules.quarters) * (quarterPace / gameRules.pace) * gameRules.threeFactor);
+
+                quarters[0][q] = homeQuarterScore;
+                quarters[1][q] = awayQuarterScore;
+                homeTotal += homeQuarterScore;
+                awayTotal += awayQuarterScore;
+            }
+
+            // 关键时刻修正
+            if (Math.abs(homeTotal - awayTotal) <= 5) {
+                const clutchMod = (home.clutch - away.clutch) / 100;
+                homeTotal += Math.round(clutchMod * 5);
+                awayTotal -= Math.round(clutchMod * 3);
+            }
+
+            return {
+                homeTeam,
+                awayTeam,
+                homeScore: Math.max(0, homeTotal),
+                awayScore: Math.max(0, awayTotal),
+                quarters,
+                winner: homeTotal > awayTotal ? 'home' : 'away'
+            };
+        }
+
+        // ==================== 单场模拟 ====================
+        function runSingleSim() {
+            const home = document.getElementById('homeTeam').value;
+            const away = document.getElementById('awayTeam').value;
+            if (!home || !away || home === away) { alert('请选择两支不同的球队'); return; }
+
+            const homeTactic = document.getElementById('homeTactic').value === 'auto' ? 'pickAndRoll' : document.getElementById('homeTactic').value;
+            const awayTactic = document.getElementById('awayTactic').value === 'auto' ? 'pickAndRoll' : document.getElementById('awayTactic').value;
+
+            const result = simulateGame(home, away, homeTactic, awayTactic, 'perimeterMark', 'perimeterMark');
+            
+            document.getElementById('singleResultCard').style.display = 'block';
+            document.getElementById('singleHomeName').textContent = home;
+            document.getElementById('singleAwayName').textContent = away;
+            document.getElementById('singleHomeScore').textContent = result.homeScore;
+            document.getElementById('singleAwayScore').textContent = result.awayScore;
+            document.getElementById('singleResultText').textContent = result.winner === 'home' ? `${home} 获胜` : `${away} 获胜`;
+
+            const quarterBody = document.getElementById('quarterBody');
+            let quarterRows = '';
+            const qLabels = ['第一节','第二节','第三节','第四节','第五节','第六节','第七节','第八节'];
+            quarterRows += `<tr><td class="font-medium">${home}</td>`;
+            for (let i=0; i<gameRules.quarters; i++) quarterRows += `<td>${result.quarters[0][i]}</td>`;
+            quarterRows += `<td class="font-bold text-primary">${result.homeScore}</td></tr>`;
+            quarterRows += `<tr><td class="font-medium">${away}</td>`;
+            for (let i=0; i<gameRules.quarters; i++) quarterRows += `<td>${result.quarters[1][i]}</td>`;
+            quarterRows += `<td class="font-bold text-secondary">${result.awayScore}</td></tr>`;
+            quarterBody.innerHTML = quarterRows;
+
+            saveHistory({
+                time: new Date().toLocaleString(),
+                type: '单场模拟',
+                match: `${home} vs ${away}`,
+                result: `${result.homeScore} : ${result.awayScore}`
+            });
+        }
+
+        // ==================== 比赛动画 ====================
+        function startGameAnimation() {
+            const home = document.getElementById('homeTeam').value;
+            const away = document.getElementById('awayTeam').value;
+            if (!home || !away || home === away) { alert('请选择两支不同的球队'); return; }
+
+            document.getElementById('animationCard').style.display = 'block';
+            document.getElementById('animHomeName').textContent = home;
+            document.getElementById('animAwayName').textContent = away;
+            document.getElementById('animHomeScore').textContent = 0;
+            document.getElementById('animAwayScore').textContent = 0;
+            document.getElementById('animQuarter').textContent = '第一节 12:00';
+            document.getElementById('animEvent').textContent = '比赛开始！中圈跳球...';
+
+            if (gameAnimInterval) clearInterval(gameAnimInterval);
+            animPaused = false;
+            document.getElementById('animPauseBtn').textContent = '暂停';
+
+            let currentQuarter = 0;
+            let timeLeft = 720; // 12分钟=720秒
+            let homeScore = 0;
+            let awayScore = 0;
+            let possession = 'home';
+            const qLabels = ['第一节','第二节','第三节','第四节'];
+
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+            let ballX = 400, ballY = 225;
+
+            gameAnimInterval = setInterval(() => {
+                if (animPaused) return;
+
+                // 绘制球场
+                ctx.clearRect(0, 0, 800, 450);
+                ctx.fillStyle = '#d4edda';
+                ctx.fillRect(0, 0, 800, 450);
+                
+                // 中线
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(400, 0);
+                ctx.lineTo(400, 450);
+                ctx.stroke();
+                
+                // 中圈
+                ctx.beginPath();
+                ctx.arc(400, 225, 60, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // 三分线
+                ctx.beginPath();
+                ctx.arc(80, 225, 150, -Math.PI/2, Math.PI/2);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(720, 225, 150, Math.PI/2, -Math.PI/2);
+                ctx.stroke();
+
+                // 篮筐
+                ctx.fillStyle = '#ff6b6b';
+                ctx.beginPath();
+                ctx.arc(60, 225, 15, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(740, 225, 15, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 球移动动画
+                const targetX = possession === 'home' ? 740 : 60;
+                const targetY = 200 + Math.random() * 50;
+                ballX += (targetX - ballX) * 0.05;
+                ballY += (targetY - ballY) * 0.05;
+
+                ctx.fillStyle = '#ff9500';
+                ctx.beginPath();
+                ctx.arc(ballX, ballY, 8, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 时间推进
+                timeLeft -= 3;
+                const min = Math.floor(timeLeft / 60);
+                const sec = timeLeft % 60;
+                document.getElementById('animQuarter').textContent = `${qLabels[currentQuarter]} ${min}:${sec.toString().padStart(2,'0')}`;
+
+                // 每24秒一个进攻回合
+                if (timeLeft % 24 === 0 && timeLeft > 0) {
+                    const isThree = Math.random() < 0.35;
+                    const made = Math.random() < 0.45;
+                    
+                    if (made) {
+                        const points = isThree ? 3 : 2;
+                        if (possession === 'home') {
+                            homeScore += points;
+                            document.getElementById('animEvent').textContent = `主队${isThree?'三分':'两分'}命中！+${points}分`;
+                        } else {
+                            awayScore += points;
+                            document.getElementById('animEvent').textContent = `客队${isThree?'三分':'两分'}命中！+${points}分`;
+                        }
+                        document.getElementById('animHomeScore').textContent = homeScore;
+                        document.getElementById('animAwayScore').textContent = awayScore;
+                    } else {
+                        document.getElementById('animEvent').textContent = `${possession==='home'?'主队':'客队'}投篮不中，篮板球`;
+                    }
+                    possession = possession === 'home' ? 'away' : 'home';
+                }
+
+                // 节间休息
+                if (timeLeft <= 0) {
+                    currentQuarter++;
+                    if (currentQuarter >= gameRules.quarters) {
+                        clearInterval(gameAnimInterval);
+                        document.getElementById('animEvent').textContent = `比赛结束！最终比分 ${homeScore} : ${awayScore}`;
+                        return;
+                    }
+                    timeLeft = 720;
+                    document.getElementById('animEvent').textContent = `第${currentQuarter+1}节开始`;
+                }
+            }, 50);
+        }
+
+        function pauseAnimation() {
+            animPaused = !animPaused;
+            document.getElementById('animPauseBtn').textContent = animPaused ? '继续' : '暂停';
+        }
+
+        function resetAnimation() {
+            if (gameAnimInterval) clearInterval(gameAnimInterval);
+            startGameAnimation();
+        }
+
+        // ==================== 批量蒙特卡洛模拟 ====================
+        function runBatchSim() {
+            const home = document.getElementById('homeTeam').value;
+            const away = document.getElementById('awayTeam').value;
+            const times = parseInt(document.getElementById('simTimes').value);
+            if (!home || !away || home === away) { alert('请选择两支不同的球队'); return; }
+
+            const homeTactic = document.getElementById('homeTactic').value === 'auto' ? 'pickAndRoll' : document.getElementById('homeTactic').value;
+            const awayTactic = document.getElementById('awayTactic').value === 'auto' ? 'pickAndRoll' : document.getElementById('awayTactic').value;
+
+            let homeWins = 0;
+            let totalHomeScore = 0;
+            let totalAwayScore = 0;
+            const totalScores = [];
+
+            for (let i = 0; i < times; i++) {
+                const res = simulateGame(home, away, homeTactic, awayTactic, 'perimeterMark', 'perimeterMark');
+                if (res.winner === 'home') homeWins++;
+                totalHomeScore += res.homeScore;
+                totalAwayScore += res.awayScore;
+                totalScores.push(res.homeScore + res.awayScore);
+            }
+
+            const homeWinRate = (homeWins / times * 100).toFixed(1);
+            const avgHome = Math.round(totalHomeScore / times);
+            const avgAway = Math.round(totalAwayScore / times);
+            const avgTotal = Math.round((totalHomeScore + totalAwayScore) / times);
+            const avgDiff = Math.abs(avgHome - avgAway);
+
+            currentBatchResult = {
+                time: new Date().toLocaleString(),
+                home,
+                away,
+                times,
+                homeWinRate,
+                avgHome,
+                avgAway
+            };
+            saveHistory({
+                time: new Date().toLocaleString(),
+                type: '批量模拟',
+                match: `${home} vs ${away}`,
+                result: `胜率${homeWinRate}%`
+            });
+
+            document.getElementById('batchResultCard').style.display = 'block';
+            document.getElementById('homeWinRate').textContent = homeWinRate + '%';
+            document.getElementById('awayWinRate').textContent = (100 - homeWinRate).toFixed(1) + '%';
+            document.getElementById('avgTotalScore').textContent = avgTotal;
+            document.getElementById('avgDiff').textContent = avgDiff + '分';
+
+            renderScoreDist(totalScores);
+            renderHistory();
+        }
+
+        // ==================== 战术建议 ====================
+        function getTacticAdvice() {
+            const myTeam = document.getElementById('myTeam').value;
+            const opponent = document.getElementById('opponentTeam').value;
+            if (!myTeam || !opponent || myTeam === opponent) { alert('请选择两支不同的球队'); return; }
+
+            const offTacticKeys = Object.keys(offensiveTactics);
+            const defTacticKeys = Object.keys(defensiveTactics);
+            const results = [];
+
+            offTacticKeys.forEach(offKey => {
+                defTacticKeys.forEach(defKey => {
+                    let wins = 0;
+                    for (let i = 0; i < 200; i++) {
+                        const res = simulateGame(myTeam, opponent, offKey, 'pickAndRoll', defKey, 'perimeterMark');
+                        if (res.winner === 'home') wins++;
+                    }
+                    results.push({ off: offKey, def: defKey, winRate: wins / 200 });
+                });
+            });
+
+            results.sort((a,b) => b.winRate - a.winRate);
+            const best = results[0];
+            const myStats = teams[myTeam].stats;
+            const oppStats = teams[opponent].stats;
+
+            document.getElementById('tacticResultCard').style.display = 'block';
+            document.getElementById('bestOffTactic').textContent = offensiveTactics[best.off].name;
+            document.getElementById('bestDefTactic').textContent = defensiveTactics[best.def].name;
+
+            let offReason = '';
+            if (best.off === 'insideAttack') offReason = `对手内线防守薄弱，我方内线能力(${myStats.insideLevel})占优，强攻篮下效率最高`;
+            else if (best.off === 'threePointShoot') offReason = `对手外线防守一般，我方三分能力(${myStats.threeLevel})出色，外线投射可拉开空间`;
+            else if (best.off === 'pickAndRoll') offReason = '双方实力均衡，挡拆战术稳定性最高，失误风险低';
+            else offReason = '对手节奏慢，我方推快攻可打乱对手防守部署';
+
+            let defReason = '';
+            if (best.def === 'paintProtect') defReason = `对手内线能力(${oppStats.insideLevel})强劲，收缩篮下可限制对手禁区得分`;
+            else if (best.def === 'perimeterMark') defReason = `对手三分能力(${oppStats.threeLevel})突出，紧逼外线可降低对手投射效率`;
+            else if (best.def === 'zoneDefense') defReason = '对手单打能力强，联防可减少防守漏洞，保护内线';
+            else defReason = '对手组织能力一般，全场紧逼可增加对手失误，创造反击机会';
+
+            document.getElementById('offTacticReason').textContent = offReason;
+            document.getElementById('defTacticReason').textContent = defReason;
+
+            const tips = [];
+            if (myStats.insideLevel > oppStats.insideLevel + 5) tips.push('• 优先打内线低位，利用身高优势创造篮下得分机会');
+            if (myStats.threeLevel > oppStats.threeLevel + 5) tips.push('• 增加外线出手次数，通过三分球拉开分差');
+            if (myStats.depth > oppStats.depth + 5) tips.push('• 增加轮换深度，利用体能优势在第2、4节拉开差距');
+            if (myStats.clutch > oppStats.clutch + 5) tips.push('• 关键时刻把球交给核心球员，利用关键球能力终结比赛');
+            if (oppStats.offense > myStats.offense + 5) tips.push('• 放慢比赛节奏，减少回合数，降低对手得分机会');
+            if (oppStats.defense < myStats.defense - 5) tips.push('• 加快进攻节奏，打对手立足未稳，增加快攻得分');
+            tips.push(`• 采用「${offensiveTactics[best.off].name}」+「${defensiveTactics[best.def].name}」组合，预计胜率 ${(best.winRate*100).toFixed(1)}%`);
+
+            document.getElementById('tacticTips').innerHTML = tips.map(t => `<li>${t}</li>`).join('');
+
+            const tableBody = document.getElementById('tacticTableBody');
+            tableBody.innerHTML = '';
+            offTacticKeys.forEach(offKey => {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td class="font-medium">${offensiveTactics[offKey].name}</td>`;
+                defTacticKeys.forEach(defKey => {
+                    const r = results.find(x => x.off === offKey && x.def === defKey);
+                    const rate = (r.winRate * 100).toFixed(1);
+                    const color = r.winRate > 0.55 ? 'text-green-600 font-bold' : r.winRate < 0.45 ? 'text-red-500' : '';
+                    row.innerHTML += `<td class="${color}">${rate}%</td>`;
+                });
+                tableBody.appendChild(row);
+            });
+        }
+
+        // ==================== 阵容交易系统 ====================
+        function renderTradePlayers(side) {
+            const teamSelect = document.getElementById(`tradeTeam${side}`);
+            const teamName = teamSelect.value;
+            const container = document.getElementById(`tradePlayers${side}`);
+            
+            if (!teamName) { container.innerHTML = ''; return; }
+            
+            const players = teams[teamName].players;
+            container.innerHTML = players.map((p, i) => `
+                <div class="player-item ${selectedTradePlayers[side].includes(i)?'selected':''}" 
+                     onclick="toggleTradePlayer('${side}', ${i})"
+                     title="${p.position} | 评分:${Math.round(p.offense)}">
+                    ${p.name} <span class="text-xs opacity-70">${p.position}</span>
+                </div>
+            `).join('');
+
+            // 更新战力显示
+            document.getElementById(`team${side}PreScore`).textContent = teams[teamName].stats.overall;
+            updateTradePostScore();
+        }
+
+        function toggleTradePlayer(side, index) {
+            const arr = selectedTradePlayers[side];
+            const pos = arr.indexOf(index);
+            if (pos > -1) arr.splice(pos, 1);
+            else arr.push(index);
+            renderTradePlayers(side);
+        }
+
+        function updateTradePostScore() {
+            const teamA = document.getElementById('tradeTeamA').value;
+            const teamB = document.getElementById('tradeTeamB').value;
+            if (!teamA || !teamB) return;
+
+            // 模拟交易后的阵容
+            const playersA = [...teams[teamA].players];
+            const playersB = [...teams[teamB].players];
+            
+            const movingToB = selectedTradePlayers.A.map(i => playersA[i]).filter(p => p);
+            const movingToA = selectedTradePlayers.B.map(i => playersB[i]).filter(p => p);
+
+            const newPlayersA = playersA.filter((_, i) => !selectedTradePlayers.A.includes(i)).concat(movingToA);
+            const newPlayersB = playersB.filter((_, i) => !selectedTradePlayers.B.includes(i)).concat(movingToB);
+
+            const statsA = calculateTeamStats(newPlayersA);
+            const statsB = calculateTeamStats(newPlayersB);
+
+            document.getElementById('teamAPostScore').textContent = statsA.overall;
+            document.getElementById('teamBPostScore').textContent = statsB.overall;
+        }
+
+        function executeTrade() {
+            const teamA = document.getElementById('tradeTeamA').value;
+            const teamB = document.getElementById('tradeTeamB').value;
+            if (!teamA || !teamB || teamA === teamB) { alert('请选择两支不同的球队'); return; }
+            if (selectedTradePlayers.A.length === 0 && selectedTradePlayers.B.length === 0) { alert('请选择要交易的球员'); return; }
+
+            const playersA = teams[teamA].players;
+            const playersB = teams[teamB].players;
+            
+            const movingToB = selectedTradePlayers.A.map(i => playersA[i]);
+            const movingToA = selectedTradePlayers.B.map(i => playersB[i]);
+
+            teams[teamA].players = playersA.filter((_, i) => !selectedTradePlayers.A.includes(i)).concat(movingToA);
+            teams[teamB].players = playersB.filter((_, i) => !selectedTradePlayers.B.includes(i)).concat(movingToB);
+
+            teams[teamA].stats = calculateTeamStats(teams[teamA].players);
+            teams[teamB].stats = calculateTeamStats(teams[teamB].players);
+
+            const diffA = teams[teamA].stats.overall - teams[teamA].stats.overall;
+            const diffB = teams[teamB].stats.overall - teams[teamB].stats.overall;
+            
+            let rating = '公平交易';
+            let comment = '双方战力基本持平，属于互惠交易';
+            const absDiff = Math.abs(teams[teamA].stats.overall - teams[teamB].stats.overall);
+            if (absDiff > 5) {
+                rating = teams[teamA].stats.overall > teams[teamB].stats.overall ? '球队A小赚' : '球队B小赚';
+                comment = '一方战力提升略大于另一方';
+            }
+            if (absDiff > 10) {
+                rating = '悬殊交易';
+                comment = '一方战力明显提升，交易差距较大';
+            }
+
+            document.getElementById('tradeResult').classList.remove('hidden');
+            document.getElementById('tradeRating').textContent = rating;
+            document.getElementById('tradeComment').textContent = comment;
+
+            saveData();
+            updateAllTeamSelects();
+            resetTrade();
+        }
+
+        function resetTrade() {
+            selectedTradePlayers = { A: [], B: [] };
+            renderTradePlayers('A');
+            renderTradePlayers('B');
+            document.getElementById('tradeResult').classList.add('hidden');
+        }
+
+        // ==================== 赛季模拟 ====================
+        function runSeasonSim() {
+            const simTimes = parseInt(document.getElementById('seasonSimTimes').value);
+            const allTeams = Object.keys(teams);
+            if (allTeams.length < 30) { alert('请先导入完整的30支球队数据'); return; }
+
+            const champCounts = {};
+            allTeams.forEach(t => champCounts[t] = 0);
+
+            for (let s = 0; s < simTimes; s++) {
+                const champion = simulateSingleSeason();
+                champCounts[champion]++;
+            }
+
+            // 显示最后一次的排名和季后赛
+            const finalStandings = simulateRegularSeason();
+            renderStandings(finalStandings.east, finalStandings.west);
+            
+            const playoffResult = simulatePlayoffs(finalStandings.east, finalStandings.west);
+            renderPlayoffBracket(playoffResult);
+            document.getElementById('championTeam').textContent = playoffResult.champion;
+            document.getElementById('championProb').textContent = `夺冠概率: ${(champCounts[playoffResult.champion]/simTimes*100).toFixed(1)}%`;
+
+            // 夺冠概率图表
+            if (simTimes > 1) {
+                const sortedTeams = Object.keys(champCounts).sort((a,b) => champCounts[b] - champCounts[a]).slice(0, 15);
+                renderChampProbChart(sortedTeams, sortedTeams.map(t => champCounts[t]/simTimes*100));
+                document.getElementById('champProbCard').style.display = 'block';
+            }
+
+            document.getElementById('seasonResultCard').style.display = 'block';
+            document.getElementById('playoffCard').style.display = 'block';
+            
+            saveHistory({
+                time: new Date().toLocaleString(),
+                type: '赛季模拟',
+                match: `${simTimes}次模拟`,
+                result: `冠军: ${playoffResult.champion}`
+            });
+        }
+
+        function simulateSingleSeason() {
+            const standings = simulateRegularSeason();
+            const playoffResult = simulatePlayoffs(standings.east, standings.west);
+            return playoffResult.champion;
+        }
+
+        function simulateRegularSeason() {
+            const eastStandings = {};
+            const westStandings = {};
+            
+            eastTeams.forEach(t => eastStandings[t] = { wins: 0, losses: 0 });
+            westTeams.forEach(t => westStandings[t] = { wins: 0, losses: 0 });
+
+            // 简化赛程：同区4场，跨区2场，每队82场
+            eastTeams.forEach((t1, i) => {
+                eastTeams.forEach((t2, j) => {
+                    if (i >= j) return;
+                    for (let g = 0; g < 4; g++) {
+                        const res = simulateGame(t1, t2);
+                        if (res.winner === 'home') { eastStandings[t1].wins++; eastStandings[t2].losses++; }
+                        else { eastStandings[t2].wins++; eastStandings[t1].losses++; }
+                    }
+                });
+                westTeams.forEach(t2 => {
+                    for (let g = 0; g < 2; g++) {
+                        const res = simulateGame(t1, t2);
+                        if (res.winner === 'home') { eastStandings[t1].wins++; westStandings[t2].losses++; }
+                        else { westStandings[t2].wins++; eastStandings[t1].losses++; }
+                    }
+                });
+            });
+
+            westTeams.forEach((t1, i) => {
+                westTeams.forEach((t2, j) => {
+                    if (i >= j) return;
+                    for (let g = 0; g < 4; g++) {
+                        const res = simulateGame(t1, t2);
+                        if (res.winner === 'home') { westStandings[t1].wins++; westStandings[t2].losses++; }
+                        else { westStandings[t2].wins++; westStandings[t1].losses++; }
+                    }
+                });
+            });
+
+            const eastSorted = Object.entries(eastStandings).sort((a,b) => b[1].wins - a[1].wins);
+            const westSorted = Object.entries(westStandings).sort((a,b) => b[1].wins - a[1].wins);
+            
+            return { east: eastSorted, west: westSorted };
+        }
+
+        function simulatePlayoffs(eastStandings, westStandings) {
+            const eastTop8 = eastStandings.slice(0,8).map(x => x[0]);
+            const westTop8 = westStandings.slice(0,8).map(x => x[0]);
+
+            // 首轮
+            const eastQF = [
+                playSeries(eastTop8[0], eastTop8[7]),
+                playSeries(eastTop8[1], eastTop8[6]),
+                playSeries(eastTop8[2], eastTop8[5]),
+                playSeries(eastTop8[3], eastTop8[4])
+            ];
+            const westQF = [
+                playSeries(westTop8[0], westTop8[7]),
+                playSeries(westTop8[1], westTop8[6]),
+                playSeries(westTop8[2], westTop8[5]),
+                playSeries(westTop8[3], westTop8[4])
+            ];
+
+            // 半决赛
+            const eastSF = [playSeries(eastQF[0], eastQF[3]), playSeries(eastQF[1], eastQF[2])];
+            const westSF = [playSeries(westQF[0], westQF[3]), playSeries(westQF[1], westQF[2])];
+
+            // 分区决赛
+            const eastChamp = playSeries(eastSF[0], eastSF[1]);
+            const westChamp = playSeries(westSF[0], westSF[1]);
+
+            // 总决赛
+            const champion = playSeries(eastChamp, westChamp);
+
+            return {
+                eastQF, eastSF, eastChamp,
+                westQF, westSF, westChamp,
+                champion
+            };
+        }
+
+        function playSeries(team1, team2) {
+            let t1Wins = 0, t2Wins = 0;
+            while (t1Wins < 4 && t2Wins < 4) {
+                const home = t1Wins + t2Wins < 2 || t1Wins + t2Wins >= 5 ? team1 : team2;
+                const away = home === team1 ? team2 : team1;
+                const res = simulateGame(home, away);
+                if (res.winner === 'home') {
+                    if (home === team1) t1Wins++; else t2Wins++;
+                } else {
+                    if (away === team1) t1Wins++; else t2Wins++;
+                }
+            }
+            return t1Wins >= 4 ? team1 : team2;
+        }
+
+        function renderStandings(east, west) {
+            const eastTable = document.getElementById('eastStandings');
+            const westTable = document.getElementById('westStandings');
+            
+            const renderTable = (data) => {
+                let html = '<thead><tr><th>排名</th><th>球队</th><th>胜</th><th>负</th><th>胜率</th></tr></thead><tbody>';
+                data.forEach((t, i) => {
+                    const wp = (t[1].wins / (t[1].wins + t[1].losses) * 100).toFixed(1);
+                    html += `<tr class="${i<8?'bg-green-50':''}">
+                        <td>${i+1}</td>
+                        <td class="text-left">${t[0]}</td>
+                        <td>${t[1].wins}</td>
+                        <td>${t[1].losses}</td>
+                        <td>${wp}%</td>
+                    </tr>`;
+                });
+                html += '</tbody>';
+                return html;
+            };
+
+            eastTable.innerHTML = renderTable(east);
+            westTable.innerHTML = renderTable(west);
+        }
+
+        function renderPlayoffBracket(result) {
+            const bracket = document.getElementById('playoffBracket');
+            const renderRound = (matches) => matches.map(m => `<div class="playoff-match">${m}</div>`).join('');
+            
+            bracket.innerHTML = `
+                <div class="playoff-round">
+                    <h5 class="text-xs font-bold text-center mb-2">首轮</h5>
+                    ${renderRound(result.eastQF)}
+                    <hr class="my-2">
+                    ${renderRound(result.westQF)}
+                </div>
+                <div class="playoff-round">
+                    <h5 class="text-xs font-bold text-center mb-2">半决赛</h5>
+                    ${renderRound(result.eastSF)}
+                    <hr class="my-2">
+                    ${renderRound(result.westSF)}
+                </div>
+                <div class="playoff-round">
+                    <h5 class="text-xs font-bold text-center mb-2">分区决赛</h5>
+                    <div class="playoff-match winner">${result.eastChamp}</div>
+                    <hr class="my-2">
+                    <div class="playoff-match winner">${result.westChamp}</div>
+                </div>
+            `;
+        }
+
+        function renderChampProbChart(teams, probs) {
+            if (champProbChart) champProbChart.destroy();
+            const ctx = document.getElementById('champProbChart').getContext('2d');
+            champProbChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: teams,
+                    datasets: [{
+                        label: '夺冠概率 (%)',
+                        data: probs,
+                        backgroundColor: 'rgba(22,93,255,0.6)',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    plugins: { title: { display: true, text: '各队夺冠概率分布' } }
+                }
+            });
+        }
+
+        // ==================== 规则设置 ====================
+        function applyRulePreset() {
+            const preset = document.getElementById('leaguePreset').value;
+            if (preset === 'nba') {
+                gameRules = { quarters: 4, pace: 24, threeFactor: 1.0, homeAdvantage: 1.03, foulLimit: 6, playoffFormat: 'bestOf7' };
+                document.getElementById('ruleDesc').innerHTML = `
+                    <li>• NBA：4节×12分钟，每节约24个进攻回合，三分线7.24米</li>
+                    <li>• 6犯罚下，加时赛5分钟</li>
+                    <li>• 主场优势约3%</li>
+                    <li>• 季后赛7场4胜制</li>
+                `;
+            } else if (preset === 'cba') {
+                gameRules = { quarters: 4, pace: 22, threeFactor: 1.05, homeAdvantage: 1.05, foulLimit: 6, playoffFormat: 'bestOf5' };
+                document.getElementById('ruleDesc').innerHTML = `
+                    <li>• CBA：4节×12分钟，节奏略慢于NBA</li>
+                    <li>• 三分线6.75米，三分命中率略高</li>
+                    <li>• 主场优势约5%</li>
+                    <li>• 季后赛首轮5局3胜</li>
+                `;
+            } else if (preset === 'fiba') {
+                gameRules = { quarters: 4, pace: 20, threeFactor: 0.95, homeAdvantage: 1.0, foulLimit: 5, playoffFormat: 'single' };
+                document.getElementById('ruleDesc').innerHTML = `
+                    <li>• FIBA：4节×10分钟，回合数更少</li>
+                    <li>• 三分线6.75米，对抗更强</li>
+                    <li>• 5犯罚下，无防守三秒</li>
+                    <li>• 淘汰赛单场决胜</li>
+                `;
+            }
+            updateRuleInputs();
+        }
+
+        function updateRuleInputs() {
+            document.getElementById('ruleQuarters').value = gameRules.quarters;
+            document.getElementById('rulePace').value = gameRules.pace;
+            document.getElementById('ruleThreeFactor').value = gameRules.threeFactor;
+            document.getElementById('ruleHomeAdvantage').value = gameRules.homeAdvantage;
+            document.getElementById('ruleFoulLimit').value = gameRules.foulLimit;
+        }
+
+        function saveRules() {
+            gameRules.quarters = parseInt(document.getElementById('ruleQuarters').value);
+            gameRules.pace = parseInt(document.getElementById('rulePace').value);
+            gameRules.threeFactor = parseFloat(document.getElementById('ruleThreeFactor').value);
+            gameRules.homeAdvantage = parseFloat(document.getElementById('ruleHomeAdvantage').value);
+            gameRules.foulLimit = parseInt(document.getElementById('ruleFoulLimit').value);
+            localStorage.setItem('nba_rules', JSON.stringify(gameRules));
+            alert('规则设置已保存');
+        }
+
+        // ==================== 渲染函数 ====================
+        function renderRank() {
+            const sortBy = document.getElementById('rankSort').value;
+            const teamList = Object.keys(teams).map(name => ({ name, ...teams[name].stats }));
+            teamList.sort((a,b) => b[sortBy] - a[sortBy]);
+
+            const tbody = document.getElementById('rankBody');
+            tbody.innerHTML = teamList.map((t, i) => `
+                <tr>
+                    <td>${i+1}</td>
+                    <td class="font-medium text-left">${t.name}</td>
+                    <td class="font-bold text-primary">${t.overall}</td>
+                    <td>${t.offense}</td>
+                    <td>${t.defense}</td>
+                    <td>${t.depth}</td>
+                    <td>${t.clutch}</td>
+                    <td>${t.threeLevel}</td>
+                    <td>${t.insideLevel}</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderRadar() {
+            const t1 = document.getElementById('radarTeam1').value;
+            const t2 = document.getElementById('radarTeam2').value;
+            if (!t1 || !t2) return;
+
+            const s1 = teams[t1].stats;
+            const s2 = teams[t2].stats;
+
+            if (radarChart) radarChart.destroy();
+            const ctx = document.getElementById('radarChart').getContext('2d');
+            radarChart = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: ['综合实力', '进攻', '防守', '阵容深度', '三分', '内线', '关键球'],
+                    datasets: [
+                        {
+                            label: t1,
+                            data: [s1.overall, s1.offense, s1.defense, s1.depth, s1.threeLevel, s1.insideLevel, s1.clutch],
+                            borderColor: '#165DFF',
+                            backgroundColor: 'rgba(22,93,255,0.2)',
+                            borderWidth: 2
+                        },
+                        {
+                            label: t2,
+                            data: [s2.overall, s2.offense, s2.defense, s2.depth, s2.threeLevel, s2.insideLevel, s2.clutch],
+                            borderColor: '#FF7D00',
+                            backgroundColor: 'rgba(255,125,0,0.2)',
+                            borderWidth: 2
+                        }
+                    ]
+                },
+                options: { scales: { r: { min: 40, max: 100 } } }
+            });
+        }
+
+        function renderScoreDist(totalScores) {
+            const bins = {};
+            totalScores.forEach(s => {
+                const bin = Math.floor(s / 10) * 10;
+                bins[bin] = (bins[bin] || 0) + 1;
+            });
+            const sortedBins = Object.keys(bins).map(Number).sort((a,b) => a-b);
+
+            if (scoreDistChart) scoreDistChart.destroy();
+            const ctx = document.getElementById('scoreDistChart').getContext('2d');
+            scoreDistChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: sortedBins.map(b => b + '-' + (b+10)),
+                    datasets: [{
+                        label: '总得分分布次数',
+                        data: sortedBins.map(b => bins[b]),
+                        backgroundColor: 'rgba(22,93,255,0.6)',
+                        borderRadius: 4
+                    }]
+                },
+                options: { plugins: { title: { display: true, text: '模拟总得分分布' } } }
+            });
+        }
+
+        function renderTeamList() {
+            const list = document.getElementById('teamList');
+            const names = Object.keys(teams);
+            if (names.length === 0) {
+                list.innerHTML = '<div class="text-gray-400 col-span-full text-center py-8">暂无数据，请先导入Excel文件</div>';
+                return;
+            }
+            list.innerHTML = names.map(name => `
+                <div class="border rounded-lg p-3 bg-blue-50 hover:bg-blue-100 transition cursor-pointer" onclick="selectTeamForDetail('${name}')">
+                    <div class="font-medium text-dark text-sm">${name}</div>
+                    <div class="text-xs text-gray-600">综合：${teams[name].stats.overall} | ${teams[name].players.length}人</div>
+                </div>
+            `).join('');
+        }
+
+        function selectTeamForDetail(name) {
+            document.getElementById('detailTeamSelect').value = name;
+            renderPlayerDetail();
+        }
+
+        function renderPlayerDetail() {
+            const teamName = document.getElementById('detailTeamSelect').value;
+            if (!teamName) return;
+            const players = teams[teamName].players.sort((a,b) => b.minutes - a.minutes);
+            
+            const container = document.getElementById('playerDetailTable');
+            container.innerHTML = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>球员</th>
+                            <th>位置</th>
+                            <th>年龄</th>
+                            <th>场均得分</th>
+                            <th>进攻</th>
+                            <th>防守</th>
+                            <th>三分</th>
+                            <th>内线</th>
+                            <th>上场时间</th>
+                            <th>状态</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${players.map((p, i) => `
+                            <tr class="${p.injured ? 'injured' : ''}" onclick="togglePlayerInjury('${teamName}', ${i})" style="cursor:pointer;">
+                                <td class="text-left">${p.name}</td>
+                                <td>${p.position}</td>
+                                <td>${p.age}</td>
+                                <td>${p.points.toFixed(1)}</td>
+                                <td>${Math.round(p.offense)}</td>
+                                <td>${Math.round(p.defense)}</td>
+                                <td>${Math.round(p.threePoint)}</td>
+                                <td>${Math.round(p.inside)}</td>
+                                <td>${p.minutes.toFixed(1)}</td>
+                                <td class="${p.injured?'text-red-500':'text-green-600'}">${p.injuryType}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function toggleInjuryMode() {
+            injuryMode = !injuryMode;
+            const btn = document.getElementById('injuryModeBtn');
+            btn.textContent = injuryMode ? '退出伤病模式' : '设置伤病模式';
+            btn.classList.toggle('bg-red-500', injuryMode);
+            btn.classList.toggle('bg-orange-500', !injuryMode);
+        }
+
+        function togglePlayerInjury(teamName, index) {
+            if (!injuryMode) return;
+            const p = teams[teamName].players[index];
+            p.injured = !p.injured;
+            p.injuryType = p.injured ? '受伤缺阵' : '健康';
+            teams[teamName].stats = calculateTeamStats(teams[teamName].players);
+            saveData();
+            renderPlayerDetail();
+            renderRank();
+        }
+
+        function updateAllTeamSelects() {
+            const names = Object.keys(teams).sort();
+            const selects = [
+                'homeTeam','awayTeam','radarTeam1','radarTeam2','myTeam','opponentTeam',
+                'detailTeamSelect','tradeTeamA','tradeTeamB'
+            ];
+            selects.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.innerHTML = names.map(n => `<option value="${n}">${n}</option>`).join('');
+            });
+        }
+
+        // ==================== 数据持久化 ====================
+        function saveData() {
+            localStorage.setItem('nba_teams_2027', JSON.stringify(teams));
+        }
+
+        function loadData() {
+            const saved = localStorage.getItem('nba_teams_2027');
+            if (saved) {
+                teams = JSON.parse(saved);
+                updateAllTeamSelects();
+                renderTeamList();
+                renderRank();
+                document.getElementById('playerDetailCard').style.display = 'block';
+            }
+            const savedRules = localStorage.getItem('nba_rules');
+            if (savedRules) {
+                gameRules = JSON.parse(savedRules);
+                updateRuleInputs();
+            }
+        }
+
+        function clearAllData() {
+            if (confirm('确定清空所有球队数据吗？')) {
+                teams = {};
+                localStorage.removeItem('nba_teams_2027');
+                renderTeamList();
+                updateAllTeamSelects();
+                document.getElementById('importTip').classList.add('hidden');
+                document.getElementById('playerDetailCard').style.display = 'none';
+            }
+        }
+
+        function saveHistory(record) {
+            simHistory.unshift(record);
+            if (simHistory.length > 100) simHistory = simHistory.slice(0, 100);
+            localStorage.setItem('nba_sim_history', JSON.stringify(simHistory));
+            renderHistory();
+        }
+
+        function renderHistory() {
+            const saved = localStorage.getItem('nba_sim_history');
+            if (saved) simHistory = JSON.parse(saved);
+            const tbody = document.getElementById('historyBody');
+            if (simHistory.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-gray-400 py-8">暂无模拟记录</td></tr>';
+                return;
+            }
+            tbody.innerHTML = simHistory.map((h, i) => `
+                <tr>
+                    <td class="text-sm">${h.time}</td>
+                    <td>${h.type}</td>
+                    <td>${h.match}</td>
+                    <td class="text-primary font-medium">${h.result}</td>
+                    <td><button onclick="deleteHistory(${i})" class="text-red-500 text-sm">删除</button></td>
+                </tr>
+            `).join('');
+        }
+
+        function deleteHistory(index) {
+            simHistory.splice(index, 1);
+            localStorage.setItem('nba_sim_history', JSON.stringify(simHistory));
+            renderHistory();
+        }
+
+        function clearHistory() {
+            if (confirm('确定清空所有模拟记录吗？')) {
+                simHistory = [];
+                localStorage.removeItem('nba_sim_history');
+                renderHistory();
+            }
+        }
+
+        function exportSimResult() {
+            if (!currentBatchResult) { alert('请先运行批量模拟'); return; }
+            const data = [
+                ['对阵', `${currentBatchResult.home} vs ${currentBatchResult.away}`],
+                ['模拟次数', currentBatchResult.times],
+                ['主队胜率', currentBatchResult.homeWinRate + '%'],
+                ['客队胜率', (100 - currentBatchResult.homeWinRate).toFixed(1) + '%'],
+                ['主队场均得分', currentBatchResult.avgHome],
+                ['客队场均得分', currentBatchResult.avgAway],
+                ['模拟时间', currentBatchResult.time]
+            ];
+            const ws = XLSX.utils.aoa_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, '模拟结果');
+            XLSX.writeFile(wb, `比赛模拟结果_${currentBatchResult.home}vs${currentBatchResult.away}.xlsx`);
+        }
+
+        // 初始化
+        window.onload = function() {
+            loadData();
+            renderHistory();
+        };
+    </script>
+</body>
+</html>
